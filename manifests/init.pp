@@ -1,6 +1,10 @@
 #
 # Installs an aptly server on the host, mirrors the repos listed in hiera, and
-# serves the (manually) published repos via apache
+# serves the (manually) published repos via apache.
+#
+# Note: If the private (secret) aptly key changes, all other trusted keys
+# will need to be re-imported. (This should only be a problem if you added
+# keys manually.)
 #
 # @param aptly_user         User aptly is running as.
 # @param aptly_uid          Uid for the aptly user, needs to be fixed for backup/restore to work properly
@@ -501,14 +505,19 @@ class aptly_profile(
     }
   }
 
+  $gpg_path = $facts['gpg_path'] ? {
+    undef   => '/usr/bin/gpg',
+    default => $facts['gpg_path'],
+  }
+
   # Aptly expects the signing key to be in its GnuPG keyring
   # Import/replace it
   exec { 'aptly_profile::init import aptly GPG key in to keyring':
-    creates     => "${aptly_homedir}/.gnupg/secring.gpg",
     user        => $aptly_user,
     environment => ["HOME=${aptly_homedir}"],
     cwd         => $aptly_homedir,
-    command     => "/usr/bin/gpg1 --import '${basename}.sec'",
+    unless      => "${gpg_path} --list-secret-keys ${key['fingerprint']}",
+    command     => "${gpg_path} --import '${basename}.sec'",
   }
   exec { 'aptly_profile::init update aptly GPG key in keyring':
     refreshonly => true,
@@ -516,7 +525,7 @@ class aptly_profile(
     user        => $aptly_user,
     environment => ["HOME=${aptly_homedir}"],
     cwd         => $aptly_homedir,
-    command     => "/bin/rm -rf .gnupg/secring.gpg; /usr/bin/gpg1 --import '${basename}.sec'",
+    command     => "/bin/rm -rf .gnupg; ${gpg_path} --import '${basename}.sec'",
   }
 
 }

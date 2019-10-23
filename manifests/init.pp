@@ -19,6 +19,7 @@
 # @param cleanup_defaults   String with default options to pass on to a cleanup for a repo
 # @param gpg_uid            Configure the UID for a newly generated gpg key.
 # @param gpg_import_apt     Import the generated key in apt immediately.
+# @param gpg_path           Override gpg binary to use. Defaults to the gpg_path fact or '/usr/bin/gpg'
 # @param trusted_keys       Hash with trusted keys.
 # @param publish            Hash with the publish configuration.
 # @param mirrors            Hash with the mirrors to configure.
@@ -60,6 +61,7 @@ class aptly_profile(
   String               $cleanup_defaults          = '--keep 5 --days 3650 --package all --noop',
   String               $gpg_uid                   = 'Aptly repo server signing key',
   Boolean              $gpg_import_apt            = false,
+  Optional[Stdlib::Absolutepath] $gpg_path        = undef,
   Hash                 $trusted_keys              = {},
   Hash                 $publish                   = {},
   Hash                 $mirrors                   = {},
@@ -83,6 +85,21 @@ class aptly_profile(
   Boolean              $api_enable_cli_and_http   = true,
   Boolean              $force_https_reverse_proxy = true,
 ){
+
+  # Deal with gpg... aptly still does not fully support gpg2.
+  # And the internal go gpg implementation does not support the newer keyring
+  # format.. Its a bit of a mess.
+  # See:
+  # * https://github.com/aptly-dev/aptly/issues/822
+  # * https://github.com/golang/go/issues/29082
+  # * https://www.gnupg.org/faq/whats-new-in-2.1.html#nosecring
+  $real_gpg_path = $gpg_path ? {
+    undef   => $facts['gpg_path'] ? {
+      undef   => '/usr/bin/gpg',
+      default => $facts['gpg_path'],
+    },
+    default => $gpg_path,
+  }
 
   # User, group and homedir
   #########################
@@ -133,8 +150,9 @@ class aptly_profile(
   # run
 
   $trusted_keys.each |$keyname, $keyconfig| {
+    $gpg_and_config = $keyconfig + { 'gpg_path' => $real_gpg_path }
     ::aptly_profile::trusted_key {$keyname:
-      * => $keyconfig
+      * => $gpg_and_config
     }
   }
 
@@ -505,19 +523,14 @@ class aptly_profile(
     }
   }
 
-  $gpg_path = $facts['gpg_path'] ? {
-    undef   => '/usr/bin/gpg',
-    default => $facts['gpg_path'],
-  }
-
   # Aptly expects the signing key to be in its GnuPG keyring
   # Import/replace it
   exec { 'aptly_profile::init import aptly GPG key in to keyring':
     user        => $aptly_user,
     environment => ["HOME=${aptly_homedir}"],
     cwd         => $aptly_homedir,
-    unless      => "${gpg_path} --list-secret-keys ${key['fingerprint']}",
-    command     => "${gpg_path} --import '${basename}.sec'",
+    unless      => "${real_gpg_path} --list-secret-keys ${key['fingerprint']}",
+    command     => "${real_gpg_path} --import '${basename}.sec'",
   }
   exec { 'aptly_profile::init update aptly GPG key in keyring':
     refreshonly => true,
@@ -525,7 +538,7 @@ class aptly_profile(
     user        => $aptly_user,
     environment => ["HOME=${aptly_homedir}"],
     cwd         => $aptly_homedir,
-    command     => "/bin/rm -rf .gnupg; ${gpg_path} --import '${basename}.sec'",
+    command     => "/bin/rm -rf .gnupg; ${real_gpg_path} --import '${basename}.sec'",
   }
 
 }

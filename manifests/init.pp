@@ -86,6 +86,11 @@ class aptly_profile(
   $cleanup_script = "${aptly_homedir}/cleanup_repo.sh"
   $insert_hello_script = "${aptly_homedir}/insert_hello.sh"
 
+  # These contain all the keywords to the different hashes that are
+  # used in this profile (And not sent to upstream aptly)
+  $_managed_repo_config_options = ['cleanup_options']
+  $_managed_publish_config_options = ['instant_publish']
+
   # Deal with gpg... aptly still does not fully support gpg2.
   # And the internal go gpg implementation does not support the newer keyring
   # format.. Its a bit of a mess.
@@ -183,25 +188,23 @@ class aptly_profile(
 
   # Filter out our cleanup options, which are used only for the cronjob and not the repo resource
   $repos.each |String $repo_name, Hash $repo_config| {
-    if has_key($repo_config, 'cleanup_options') {
-      $filtered_repo_config = delete_regex($repo_config, 'cleanup_options')
-      concat::fragment { "${repo_name}_cleanup":
-        target  => $cleanup_cronjob,
-        order   => 20,
-        content => "${cleanup_script} --repo ${repo_name} ${repo_config['cleanup_options']}\n",
-      }
+
+    $filtered_repo_config = $repo_config.filter |$pair| {
+      !($pair[0] in $_managed_repo_config_options)
     }
-    else {
-      $filtered_repo_config = $repo_config
-      concat::fragment { "${repo_name}_cleanup":
-        target  => $cleanup_cronjob,
-        order   => 20,
-        content => "${cleanup_script} --repo ${repo_name} ${cleanup_defaults}\n",
-      }
+
+    $cleanup_options = $repo_config.dig('cleanup_options') ? {
+      undef   => $cleanup_defaults,
+      default => $repo_config['cleanup_options'],
+    }
+
+    concat::fragment { "${repo_name}_cleanup":
+      target  => $cleanup_cronjob,
+      order   => 20,
+      content => "${cleanup_script} --repo ${repo_name} ${cleanup_options}\n",
     }
 
     $combined_repo_config = merge($filtered_repo_config, $repo_defaults)
-
     # Create aptly repo
     ::aptly::repo { $repo_name:
       * => $combined_repo_config,
@@ -305,11 +308,14 @@ class aptly_profile(
   }
 
   $publish.each |String $publish_name, Hash $config| {
-    if has_key($config, 'instant_publish') {
-      $instant_publish = $config['instant_publish']
+
+    $filtered_publish_config = $config.filter |$pair| {
+      !($pair[0] in $_managed_publish_config_options)
     }
-    else {
-      $instant_publish = false
+
+    $instant_publish = $config.dig('instant_publish') ? {
+      undef   => false,
+      default => $config['instant_publish'],
     }
 
     aptly_profile::publish {$publish_name:

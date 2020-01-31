@@ -1,0 +1,11 @@
+<%- |
+  String $auth_type,
+  Stdlib::Absolutepath $auth_file,
+| -%>
+
+<Location "/pool/">
+  AuthType <%= $auth_type %>
+  AuthBasicProvider file
+  AuthUserFile <%= $auth_file %>
+  Require valid-user
+</Location>

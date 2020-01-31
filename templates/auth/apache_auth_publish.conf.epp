@@ -1,0 +1,23 @@
+<%- |
+  String $distribution,
+  String $auth_type,
+  Stdlib::Absolutepath $auth_file,
+  Array[String] $allow_from,
+  Optional[String] $prefix = undef,
+| -%>
+# Configuration for publish point <%= $distribution %>
+<% if $prefix { -%>
+<Location "/<%= $prefix %>/">
+  AuthType <%= $auth_type %>
+  AuthBasicProvider file
+  AuthUserFile <%= $auth_file %>
+  Require user <%= $allow_from.join(' ') %>
+</Location>
+<% } else { -%>
+<Location "/dists/<%= $distribution %>/">
+  AuthType <%= $auth_type %>
+  AuthBasicProvider file
+  AuthUserFile <%= $auth_file %>
+  Require user <%= $allow_from.join(' ') %>
+</Location>
+<% } -%>

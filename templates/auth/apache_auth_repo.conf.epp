@@ -1,0 +1,15 @@
+<%- |
+  String $api_path,
+  Stdlib::Absolutepath $auth_file,
+  String $auth_type,
+  String $repo_name,
+  Array[String] $allow_from,
+| -%>
+# Restrict access for repository <%= $repo_name %>
+<LocationMatch "<%= $api_path %>/+(repos|publish)/+<%= $repo_name %>">
+  AuthType <%= $auth_type %>
+  AuthBasicProvider file
+  AuthUserFile <%= $auth_file %>
+  Require user <%= $allow_from.join(' ') %>
+</LocationMatch>
+

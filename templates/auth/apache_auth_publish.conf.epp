@@ -1,0 +1,13 @@
+<%- |
+  String $publish_name,
+  String $auth_type,
+  Stdlib::Absolutepath $auth_file,
+  Array[String] $allow_from,
+| -%>
+
+<Location "/dists/<%= $publish_name %>/">
+  AuthType <%= $auth_type %>
+  AuthBasicProvider file
+  AuthUserFile <%= $auth_file %>
+  Require user <%= $allow_from.join(' ') %>
+</Location>

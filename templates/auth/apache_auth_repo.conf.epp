@@ -5,13 +5,17 @@
   String $repo_name,
   Array[String] $allow_from,
 |
-$api_paths = [
-  "^${api_path}/+(repos|publish)/+${repo_name}",
-  "^${api_path}/+files/+${repo_name}",
-].join('|')
+
+if $repo_name =~ /(?:(.*)\/)?([^\/]+)/ {
+  $_prefix = $1 ? {
+    undef   => ':\.',
+    default => $1,
+  }
+  $_repo_name = $2
+}
 -%>
 # Restrict access for repository <%= $repo_name %>
-<LocationMatch "<%= $api_paths %>">
+<LocationMatch "^<%= $api_path %>/+(repos|files|publish/+<%= $_prefix %>)/+<%= $_repo_name %>">
   AuthType <%= $auth_type %>
   AuthBasicProvider file
   AuthUserFile <%= $auth_file %>

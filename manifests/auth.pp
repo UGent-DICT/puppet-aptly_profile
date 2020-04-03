@@ -72,7 +72,7 @@ class aptly_profile::auth(
   }
   unless $restricted_publish.empty() {
     $restricted_publish.each |String $publish_name, Hash $config| {
-      concat::fragment {"aptly_profile::auth: publish ${name}":
+      concat::fragment {"aptly_profile::auth: publish ${publish_name}":
         target  => $config_path,
         order   => 1,
         content => epp('aptly_profile/auth/apache_auth_publish.conf.epp', {

@@ -16,7 +16,8 @@
 # @param manage_group       Manage the aptly group.
 # @param manage_homedir     Manage the homedir.
 # @param manage_apache      Manage apache and vhost configuration.
-# @param cleanup_defaults   String with default options to pass on to a cleanup for a repo
+# @param cleanup_defaults   String with default options to pass on to a cleanup for a repo.
+#   This value is only used if your repo_defaults does not contain `cleanup_options`.
 # @param gpg_uid            Configure the UID for a newly generated gpg key.
 # @param gpg_import_apt     Import the generated key in apt immediately.
 # @param gpg_path           Override gpg binary to use. Defaults to the gpg_path fact or '/usr/bin/gpg'
@@ -86,6 +87,12 @@ class aptly_profile(
   $cleanup_script = "${aptly_homedir}/cleanup_repo.sh"
   $insert_hello_script = "${aptly_homedir}/insert_hello.sh"
   $api_listen = "${api_listen_ip}:${api_listen_port}"
+
+  # These contain all the keywords to the different hashes that are
+  # used in this profile (And not sent to upstream aptly)
+  $_managed_repo_config_options = ['cleanup_options']
+  $_managed_publish_config_options = ['instant_publish']
+  $_managed_mirror_config_options = []
 
   # Deal with gpg... aptly still does not fully support gpg2.
   # And the internal go gpg implementation does not support the newer keyring
@@ -160,8 +167,14 @@ class aptly_profile(
   $_mirror_defaults = merge({'environment' => $aptly_environment}, $mirror_defaults)
   # Pass through the aptly_environment to the execs used for mirroring
   $mirrors.each |$mirror_name, $mirror_config| {
+    $_mirror_config = merge($mirror_config, $_mirror_defaults)
+
+    $filtered_mirror_config = $_mirror_config.filter |$pair| {
+      !($pair[0] in $_managed_mirror_config_options)
+    }
+
     ::aptly_profile::delayed_mirror {$mirror_name:
-      config => merge($mirror_config, $_mirror_defaults)
+      config => $filtered_mirror_config,
     }
   }
 
@@ -182,30 +195,28 @@ class aptly_profile(
 ',
   }
 
-  # Filter out our cleanup options, which are used only for the cronjob and not the repo resource
   $repos.each |String $repo_name, Hash $repo_config| {
-    if has_key($repo_config, 'cleanup_options') {
-      $filtered_repo_config = delete_regex($repo_config, 'cleanup_options')
-      concat::fragment { "${repo_name}_cleanup":
-        target  => $cleanup_cronjob,
-        order   => 20,
-        content => "${cleanup_script} --repo ${repo_name} ${repo_config['cleanup_options']}\n",
-      }
-    }
-    else {
-      $filtered_repo_config = $repo_config
-      concat::fragment { "${repo_name}_cleanup":
-        target  => $cleanup_cronjob,
-        order   => 20,
-        content => "${cleanup_script} --repo ${repo_name} ${cleanup_defaults}\n",
-      }
+    $_repo_config = merge($repo_config, $repo_defaults)
+
+    # Filter out our profile repo options, ex: some params are used only for the cronjob and not the repo resource
+    $filtered_repo_config = $_repo_config.filter |$pair| {
+      !($pair[0] in $_managed_repo_config_options)
     }
 
-    $combined_repo_config = merge($filtered_repo_config, $repo_defaults)
+    $cleanup_options = $_repo_config.dig('cleanup_options') ? {
+      undef   => $cleanup_defaults,
+      default => $_repo_config['cleanup_options'],
+    }
+
+    concat::fragment { "${repo_name}_cleanup":
+      target  => $cleanup_cronjob,
+      order   => 20,
+      content => "${cleanup_script} --repo ${repo_name} ${cleanup_options}\n",
+    }
 
     # Create aptly repo
     ::aptly::repo { $repo_name:
-      * => $combined_repo_config,
+      * => $filtered_repo_config,
     }
     if $insert_hello {
       exec {"aptly_profile::insert_hello: ${repo_name}":
@@ -308,19 +319,23 @@ class aptly_profile(
   }
 
   $publish.each |String $publish_name, Hash $config| {
-    if has_key($config, 'instant_publish') {
-      $instant_publish = $config['instant_publish']
+    $_publish_config = merge($config, $publish_defaults)
+
+    $filtered_publish_config = $_publish_config.filter |$pair| {
+      !($pair[0] in $_managed_publish_config_options)
     }
-    else {
-      $instant_publish = false
+
+    $instant_publish = $_publish_config.dig('instant_publish') ? {
+      undef   => false,
+      default => $config['instant_publish'],
     }
 
     aptly_profile::publish {$publish_name:
-      config          => $config,
+      config          => $filtered_publish_config,
       instant_publish => $instant_publish,
     }
 
-    $ifrepo = find_key($config, 'repo')
+    $ifrepo = find_key($_publish_config, 'repo')
     if ($ifrepo != undef) {
       Aptly_profile::Publish[$publish_name] {
         require => Aptly::Repo[$ifrepo],

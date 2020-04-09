@@ -1,10 +1,16 @@
+# @summary Configures an aptly server with scripting for maintenance (sync, cleanup, publishing)
 #
 # Installs an aptly server on the host, mirrors the repos listed in hiera, and
 # serves the (manually) published repos via apache.
 #
-# Note: If the private (secret) aptly key changes, all other trusted keys
+# Note on gpg: If the private (secret) aptly key changes, all other trusted keys
 # will need to be re-imported. (This should only be a problem if you added
 # keys manually.)
+#
+# Note on ensure `absent`: You can specify ensure for repos, mirrors and publish endpoints.
+# HOWEVER: This will NOT remove any of these of the aptly server but only stop managing these with puppet.
+# Cleanup of repositories, mirrors and publishes should be done manually!
+# You can however use `ensure` to override hiera config and exclude resources this way.
 #
 # @param aptly_user         User aptly is running as.
 # @param aptly_uid          Uid for the aptly user, needs to be fixed for backup/restore to work properly
@@ -90,9 +96,9 @@ class aptly_profile(
 
   # These contain all the keywords to the different hashes that are
   # used in this profile (And not sent to upstream aptly)
-  $_managed_repo_config_options = ['cleanup_options']
-  $_managed_publish_config_options = ['instant_publish']
-  $_managed_mirror_config_options = []
+  $_managed_repo_config_options = ['cleanup_options', 'ensure']
+  $_managed_publish_config_options = ['instant_publish', 'ensure']
+  $_managed_mirror_config_options = ['ensure']
 
   # Deal with gpg... aptly still does not fully support gpg2.
   # And the internal go gpg implementation does not support the newer keyring
@@ -173,8 +179,14 @@ class aptly_profile(
       !($pair[0] in $_managed_mirror_config_options)
     }
 
-    ::aptly_profile::delayed_mirror {$mirror_name:
-      config => $filtered_mirror_config,
+    $mirror_ensure = $_mirror_config.dig('ensure') ? {
+      undef   => 'present',
+      default => $mirror_config['ensure'],
+    }
+    if ($mirror_ensure == 'present') {
+      ::aptly_profile::delayed_mirror {$mirror_name:
+        config => $filtered_mirror_config,
+      }
     }
   }
 
@@ -207,27 +219,33 @@ class aptly_profile(
       undef   => $cleanup_defaults,
       default => $_repo_config['cleanup_options'],
     }
-
-    concat::fragment { "${repo_name}_cleanup":
-      target  => $cleanup_cronjob,
-      order   => 20,
-      content => "${cleanup_script} --repo ${repo_name} ${cleanup_options}\n",
+    $repo_ensure = $_repo_config.dig('ensure') ? {
+      undef   => 'present',
+      default => $_repo_config['ensure'],
     }
 
-    # Create aptly repo
-    ::aptly::repo { $repo_name:
-      * => $filtered_repo_config,
-    }
-    if $insert_hello {
-      exec {"aptly_profile::insert_hello: ${repo_name}":
-        command     => shell_join([
-          $insert_hello_script, '--repo', $repo_name,
-        ]),
-        user        => $aptly_user,
-        cwd         => $aptly_homedir,
-        refreshonly => true,
-        subscribe   => Exec["aptly_repo_create-${repo_name}"],
-        require     => File[$insert_hello_script],
+    if ($repo_ensure == 'present') {
+      concat::fragment { "${repo_name}_cleanup":
+        target  => $cleanup_cronjob,
+        order   => 20,
+        content => "${cleanup_script} --repo ${repo_name} ${cleanup_options}\n",
+      }
+
+      # Create aptly repo
+      ::aptly::repo { $repo_name:
+        * => $filtered_repo_config,
+      }
+      if $insert_hello {
+        exec {"aptly_profile::insert_hello: ${repo_name}":
+          command     => shell_join([
+            $insert_hello_script, '--repo', $repo_name,
+          ]),
+          user        => $aptly_user,
+          cwd         => $aptly_homedir,
+          refreshonly => true,
+          subscribe   => Exec["aptly_repo_create-${repo_name}"],
+          require     => File[$insert_hello_script],
+        }
       }
     }
   }
@@ -329,8 +347,13 @@ class aptly_profile(
       undef   => false,
       default => $config['instant_publish'],
     }
+    $publish_ensure = $_publish_config.dig('ensure') ? {
+      undef   => 'present',
+      default => $config['ensure'],
+    }
 
     aptly_profile::publish {$publish_name:
+      ensure          => $publish_ensure,
       config          => $filtered_publish_config,
       instant_publish => $instant_publish,
     }

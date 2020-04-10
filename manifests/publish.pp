@@ -3,6 +3,7 @@
 # @param config Hash with configuration for the aptly-update.rb script
 # @param instant_publish Boolean indicating to instantly run the aptly-update.rb script for this publishing point.
 define aptly_profile::publish(
+  Enum['present', 'absent'] $ensure = 'present',
   Hash $config,
   Boolean $instant_publish = false,
 ) {
@@ -18,14 +19,19 @@ define aptly_profile::publish(
 
   $config_hash = merge($config_defaults, $config)
 
+  $file_ensure = $ensure ? {
+    'absent' => 'absent',
+    default  => 'file',
+  }
+
   file {"${::aptly_profile::publish_d}/${yaml_name}.yaml":
-    ensure  => 'file',
+    ensure  => $file_ensure,
     owner   => $::aptly_profile::aptly_user,
     group   => $::aptly_profile::aptly_group,
     content => inline_template('<%= @config_hash.to_hash.to_yaml %>'),
   }
 
-  if $instant_publish {
+  if ($instant_publish and $ensure == 'present' ) {
     exec {"aptly_profile::publish: instant-publish ${name}":
       refreshonly => true,
       command     => "${::aptly_profile::aptly_homedir}/aptly-update.rb '${name}'",

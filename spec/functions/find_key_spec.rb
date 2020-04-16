@@ -31,11 +31,11 @@ describe 'find_key' do
             'y' => '13',
             'nest' => {
               'more' => 'nesting',
-              'woopy' => 'looped'
-            }
-          }
+              'woopy' => 'looped',
+            },
+          },
         },
-        'woopy'
+        'woopy',
       ).and_return('looped')
     end
   end
@@ -47,11 +47,11 @@ describe 'find_key' do
           'bar' => {
             'a' => 'b',
             'c' => 'notnil',
-            'd' => 'e'
+            'd' => 'e',
           },
-          'c' => nil
+          'c' => nil,
         },
-        'c'
+        'c',
       ).and_return(nil)
     end
   end

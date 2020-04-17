@@ -51,6 +51,10 @@
 # @param api_listen_port    Port to listen on. Default 8080
 # @param api_enable_cli_and_http  Allow combined use of Aptly API & CLI
 # @param force_https_reverse_proxy Force rewrites to https if we are behind a reverse proxy (looking at x-forwareded-proto)
+# @param export_auth_file If set, the module will generate an apache configuration file
+#   limiting the use of repos (api) and/or publish endpoints.
+# @param export_auth_type The apache authentication type (Basic, Digest).
+# @param export_auth_passfile The apache htaccess file to use.
 #
 class aptly_profile(
   String               $aptly_user                = 'aptly',
@@ -88,6 +92,9 @@ class aptly_profile(
   Integer              $api_listen_port           = 8080,
   Boolean              $api_enable_cli_and_http   = true,
   Boolean              $force_https_reverse_proxy = true,
+  String               $export_auth_type          = 'basic',
+  String               $export_auth_passfile      = '/data/aptly/.aptly-passwdfile',
+  Optional[Stdlib::Absolutepath] $export_auth_file = undef,
 ){
 
   $cleanup_script = "${aptly_homedir}/cleanup_repo.sh"
@@ -96,8 +103,8 @@ class aptly_profile(
 
   # These contain all the keywords to the different hashes that are
   # used in this profile (And not sent to upstream aptly)
-  $_managed_repo_config_options = ['cleanup_options', 'ensure']
-  $_managed_publish_config_options = ['instant_publish', 'ensure']
+  $_managed_repo_config_options = ['cleanup_options', 'ensure', 'allow_from']
+  $_managed_publish_config_options = ['instant_publish', 'ensure', 'allow_from']
   $_managed_mirror_config_options = ['ensure']
 
   # Deal with gpg... aptly still does not fully support gpg2.
@@ -389,6 +396,16 @@ class aptly_profile(
       group               => $api_group,
       listen              => $api_listen,
       enable_cli_and_http => $api_enable_cli_and_http,
+    }
+  }
+
+  if $export_auth_file {
+    class {'::aptly_profile::auth':
+      config_path => $export_auth_file,
+      passfile    => $export_auth_passfile,
+      repos       => $repos,
+      publish     => $publish,
+      require     => Class['apache'],
     }
   }
 

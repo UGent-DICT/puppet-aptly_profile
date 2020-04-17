@@ -1,0 +1,23 @@
+<%- |
+  String $api_path,
+  Stdlib::Absolutepath $auth_file,
+  String $auth_type,
+  String $repo_name,
+  Array[String] $allow_from,
+|
+
+if $repo_name =~ /(?:(.*)\/)?([^\/]+)/ {
+  $_prefix = $1 ? {
+    undef   => ':\.',
+    default => $1,
+  }
+  $_repo_name = $2
+}
+-%>
+# Restrict access for repository <%= $repo_name %>
+<LocationMatch "^<%= $api_path %>/+(repos|files)/+<%= $_repo_name %>">
+  AuthType <%= $auth_type %>
+  AuthBasicProvider file
+  AuthUserFile <%= $auth_file %>
+  Require user <%= $allow_from.join(' ') %>
+</LocationMatch>

@@ -48,10 +48,14 @@ function aptly_profile::publish_auth_order_by_prefix(
       assert_type(Aptly_profile::DistroPermissions, $publish_params['allow_from']) |$expected, $actual| {
         fail("Parameter 'allow_from' for publish point '${publish_point}' expects a ${expected}. Not '${publish_params['allow_from']}'")
       }
-      $publish_allow = { $prefix => { $distribution => $publish_params['allow_from'] }}
+      $allow_from = $publish_params['allow_from'] ? {
+        Array   => $publish_params['allow_from'].sort(),
+        default => $publish_params['allow_from'],
+      }
+      $publish_allow = { $prefix => { $distribution => $allow_from, }}
     }
     else {
-      $publish_allow = { $prefix => { $distribution => undef }}
+      $publish_allow = { $prefix => { $distribution => undef, }}
     }
     deep_merge($memo, $publish_allow)
   }

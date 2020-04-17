@@ -60,6 +60,18 @@ describe 'aptly_profile::publish_auth_order_by_prefix' do
     end
   end
 
+  describe 'validates allow_from values' do
+    let(:publish) do
+      {
+        'main' => { 'allow_from' => 'wrong_value' },
+      }
+    end
+
+    it do
+      is_expected.to run.with_params(publish).and_raise_error(%r{'allow_from' for publish point 'main' expects a })
+    end
+  end
+
   describe 'sanitizes allow_from parameters' do
     let(:publish) do
       {
@@ -83,18 +95,6 @@ describe 'aptly_profile::publish_auth_order_by_prefix' do
     end
   end
 
-  describe 'validates allow_from values' do
-    let(:publish) do
-      {
-        'main' => { 'allow_from' => 'wrong_value' },
-      }
-    end
-
-    it do
-      is_expected.to run.with_params(publish).and_raise_error(%r{'allow_from' for publish point 'main' expects a })
-    end
-  end
-
   describe 'sorts' do
     let(:publish) do
       {
@@ -102,7 +102,7 @@ describe 'aptly_profile::publish_auth_order_by_prefix' do
         'z/b' => {},
         'z/a' => {},
         'a/b' => { 'allow_from' => ['user'] },
-        'zzz' => {},
+        'zzz' => { 'allow_from' => ['bbb', 'ooo', 'aaa', 'ttt'] },
         'aaa' => {},
       }
     end
@@ -112,7 +112,7 @@ describe 'aptly_profile::publish_auth_order_by_prefix' do
         '' => {
           'aaa' => nil,
           'jjj' => ['user'],
-          'zzz' => nil,
+          'zzz' => ['aaa', 'bbb', 'ooo', 'ttt'],
         },
         'a' => {
           'b' => ['user'],

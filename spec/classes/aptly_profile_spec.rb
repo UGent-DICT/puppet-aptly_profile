@@ -15,8 +15,8 @@ describe 'aptly_profile' do
         it { is_expected.to contain_apache__vhost('aptly') }
 
         it 'api not enabled' do
-          is_expected.to_not contain_apache__vhost('api.aptly')
-          is_expected.to_not contain_class('aptly::api')
+          is_expected.not_to contain_apache__vhost('api.aptly')
+          is_expected.not_to contain_class('aptly::api')
         end
       end
 
@@ -43,9 +43,9 @@ describe 'aptly_profile' do
 
         it { is_expected.to contain_class('aptly::api') }
         it 'does not include apache configuration' do
-          is_expected.to_not contain_class('apache')
-          is_expected.to_not contain_apache__vhost('aptly')
-          is_expected.to_not contain_apache__vhost('api.aptly')
+          is_expected.not_to contain_class('apache')
+          is_expected.not_to contain_apache__vhost('aptly')
+          is_expected.not_to contain_apache__vhost('api.aptly')
         end
       end
     end

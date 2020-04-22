@@ -36,6 +36,12 @@ spec/spec_helper.rb:
     end
 #end spec_overrides
 
+spec/default_facts.yml:
+  extra_facts:
+    gpg_keys: {}
+    operatingsystem: Debian # See bug https://tickets.puppetlabs.com/browse/PUP-8543
+    osfamily: Debian
+
 # Unused files.
 appveyor.yml:
   delete: true

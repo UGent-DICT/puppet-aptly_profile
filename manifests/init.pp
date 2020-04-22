@@ -51,43 +51,56 @@
 # @param api_listen_port    Port to listen on. Default 8080
 # @param api_enable_cli_and_http  Allow combined use of Aptly API & CLI
 # @param force_https_reverse_proxy Force rewrites to https if we are behind a reverse proxy (looking at x-forwareded-proto)
+# @param export_auth_file If set, the module will generate an apache configuration file
+#   limiting the use of repos (api) and/or publish endpoints.
+# @param export_auth_type The apache authentication type (Basic, Digest).
+# @param export_auth_passfile The apache htaccess file to use.
 #
 class aptly_profile(
-  String               $aptly_user                = 'aptly',
-  String               $aptly_uid                 = '401',
-  String               $aptly_group               = 'users',
-  String               $aptly_homedir             = '/data/aptly',
-  String               $aptly_shell               = '/bin/bash',
-  Hash                 $aptly_config              = {},
-  Boolean              $manage_user               = true,
-  Boolean              $manage_group              = true,
-  Boolean              $manage_homedir            = true,
-  Boolean              $manage_apache             = true,
-  String               $cleanup_defaults          = '--keep 5 --days 3650 --package all --noop',
-  String               $gpg_uid                   = 'Aptly repo server signing key',
-  Boolean              $gpg_import_apt            = false,
-  Optional[Stdlib::Absolutepath] $gpg_path        = undef,
-  Hash                 $trusted_keys              = {},
-  Hash                 $publish                   = {},
-  Hash                 $mirrors                   = {},
-  Hash                 $repos                     = {},
-  Hash                 $mirror_defaults           = {},
-  Hash                 $repo_defaults             = {},
-  Hash                 $publish_defaults          = {},
-  Array[String]        $aptly_environment         = [],
-  Stdlib::Absolutepath $aptly_cache_dir           = '/var/cache/aptly',
-  Boolean              $insert_hello              = true,
-  Boolean              $enable_api                = false,
-  Boolean              $proxy_api                 = true,
-  Hash                 $proxy_api_htpasswd_users  = {},
-  String               $api_vhost                 = "api.${facts['fqdn']}",
-  String               $api_ensure                = 'running',
-  String               $api_user                  = 'aptly',
-  String               $api_group                 = 'users',
-  Optional[String]     $api_listen_ip             = '127.0.0.1',
-  Integer              $api_listen_port           = 8080,
-  Boolean              $api_enable_cli_and_http   = true,
-  Boolean              $force_https_reverse_proxy = true,
+  String $aptly_user = 'aptly',
+  String $aptly_uid = '401',
+  String $aptly_group = 'users',
+  String $aptly_homedir = '/data/aptly',
+  String $aptly_shell = '/bin/bash',
+  Hash $aptly_config = {},
+
+  Boolean $manage_user = true,
+  Boolean $manage_group = true,
+  Boolean $manage_homedir = true,
+  Boolean $manage_apache = true,
+  Boolean $insert_hello = true,
+
+  String $cleanup_defaults = '--keep 5 --days 3650 --package all --noop',
+  Array[String] $aptly_environment = [],
+  Stdlib::Absolutepath $aptly_cache_dir = '/var/cache/aptly',
+
+  String $gpg_uid = 'Aptly repo server signing key',
+  Boolean $gpg_import_apt = false,
+  Optional[Stdlib::Absolutepath] $gpg_path = undef,
+  Hash $trusted_keys = {},
+
+  Hash $publish = {},
+  Hash $mirrors = {},
+  Hash $repos = {},
+  Hash $mirror_defaults = {},
+  Hash $repo_defaults = {},
+  Hash $publish_defaults = {},
+
+  Boolean $enable_api = false,
+  Boolean $proxy_api = true,
+  Hash $proxy_api_htpasswd_users = {},
+  String $api_vhost = "api.${facts['fqdn']}",
+  String $api_ensure = 'running',
+  String $api_user = 'aptly',
+  String $api_group = 'users',
+  Optional[String] $api_listen_ip = '127.0.0.1',
+  Integer $api_listen_port = 8080,
+  Boolean $api_enable_cli_and_http = true,
+  Boolean $force_https_reverse_proxy = true,
+
+  Optional[Stdlib::Absolutepath] $export_auth_file = undef,
+  String $export_auth_type = 'basic',
+  String $export_auth_passfile = '/data/aptly/.aptly-passwdfile',
 ){
 
   $cleanup_script = "${aptly_homedir}/cleanup_repo.sh"
@@ -96,8 +109,8 @@ class aptly_profile(
 
   # These contain all the keywords to the different hashes that are
   # used in this profile (And not sent to upstream aptly)
-  $_managed_repo_config_options = ['cleanup_options', 'ensure']
-  $_managed_publish_config_options = ['instant_publish', 'ensure']
+  $_managed_repo_config_options = ['cleanup_options', 'ensure', 'allow_from']
+  $_managed_publish_config_options = ['instant_publish', 'ensure', 'allow_from']
   $_managed_mirror_config_options = ['ensure']
 
   # Deal with gpg... aptly still does not fully support gpg2.
@@ -389,6 +402,16 @@ class aptly_profile(
       group               => $api_group,
       listen              => $api_listen,
       enable_cli_and_http => $api_enable_cli_and_http,
+    }
+  }
+
+  if $export_auth_file {
+    class {'::aptly_profile::auth':
+      config_path => $export_auth_file,
+      passfile    => $export_auth_passfile,
+      repos       => $repos,
+      publish     => $publish,
+      require     => Class['apache'],
     }
   }
 

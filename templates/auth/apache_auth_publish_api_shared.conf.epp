@@ -1,0 +1,14 @@
+<%- |
+  String $api_path,
+  String $auth_type,
+  Stdlib::Absolutepath $auth_file,
+  Aptly_profile::LocationRequires $require,
+| -%>
+
+# Shared API Configuration
+<LocationMatch "^<%= $api_path %>/+publish$">
+  AuthType <%= $auth_type %>
+  AuthBasicProvider file
+  AuthUserFile <%= $auth_file %>
+  Require <%= aptly_profile::format_require($require) %>
+</LocationMatch>

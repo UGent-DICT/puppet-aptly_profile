@@ -9,7 +9,7 @@
 <%
   $match_prefix = $prefix ? {
     ''      => ':\.',
-    default => ":${prefix}"
+    default => $prefix,
   }
   $shared_require = $requires['pool']
   $distribution_requires = $requires['dists']

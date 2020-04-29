@@ -3,6 +3,7 @@ require 'spec_helper'
 describe 'aptly_profile::convert_publish_allow_from_to_requires' do
   let(:default_allow_from) { 'prefix' }
   let(:prefixes) { {} }
+  let(:repos) { {} }
 
   it 'exists' do
     is_expected.not_to be(nil)
@@ -10,11 +11,22 @@ describe 'aptly_profile::convert_publish_allow_from_to_requires' do
 
   describe 'smoketest' do
     let(:strict) { false }
+    let(:repos) do
+      {
+        'stable' => { 'allow_from' => ['admin'] },
+        'publish_limit' => { 'allow_from' => ['userx', 'usery'] },
+      }
+    end
     let(:publish) do
       {
         'unmanaged/foo' => {},
         'unmanaged/bar' => {},
-        'stable' => { 'allow_from' => ['admin'] },
+        'stable' => {
+          'allow_from' => ['prduser'],
+          'components' => {
+            'foo' => { 'repo' => 'stable' },
+          },
+        },
         'testing' => { 'allow_from' => 'authenticated' },
         'foo/test' => { 'allow_from' => ['user1'] },
         'foo/bar' => { 'allow_from' => ['user2'] },
@@ -22,32 +34,47 @@ describe 'aptly_profile::convert_publish_allow_from_to_requires' do
         'bar/shared' => { 'allow_from' => 'authenticated' },
         'bar/user' => { 'allow_from' => ['user3'] },
         'bar/undefined' => {},
+        'public/publish_auth' => {
+          'components' => { 'main' => { 'repo' => 'publish_limit' } },
+        },
       }
     end
 
     it 'generates an authorization scheme' do
-      is_expected.to run.with_params(publish, prefixes, default_allow_from, strict).and_return(
+      is_expected.to run.with_params(publish, prefixes, repos, default_allow_from, strict).and_return(
         '' => {
+          'api' => ['admin'], # limit post
           'pool' => 'valid-user',
           'dists' => {
-            'stable' => ['admin'],
-            'testing' => 'valid-user',
+            'stable' => {
+              'api' => ['admin'],
+              'public' => ['prduser'],
+            },
+            'testing' => {
+              'public' => 'valid-user',
+            },
           },
         },
         'bar' => {
           'pool' => 'valid-user',
           'dists' => {
-            'shared' => 'valid-user',
-            'undefined' => 'valid-user',
-            'user' => ['user3'],
+            'shared' => { 'public' => 'valid-user' },
+            'undefined' => { 'public' => 'valid-user' },
+            'user' => { 'public' => ['user3'] },
           },
         },
         'foo' => {
           'pool' => ['user1', 'user2'],
           'dists' => {
-            'bar' => ['user2'],
-            'baz' => ['user1', 'user2'],
-            'test' => ['user1'],
+            'bar' => { 'public' => ['user2'] },
+            'baz' => { 'public' => ['user1', 'user2'] },
+            'test' => { 'public' => ['user1'] },
+          },
+        },
+        'public' => {
+          'api' => ['userx', 'usery'],
+          'dists' => {
+            'publish_auth' => { 'api' => ['userx', 'usery'] },
           },
         },
       )
@@ -63,7 +90,7 @@ describe 'aptly_profile::convert_publish_allow_from_to_requires' do
           let(:publish) { {} }
 
           it do
-            is_expected.to run.with_params(publish, prefixes, default_allow_from, strict).and_return({})
+            is_expected.to run.with_params(publish, prefixes, repos, default_allow_from, strict).and_return({})
           end
         end
 
@@ -77,12 +104,12 @@ describe 'aptly_profile::convert_publish_allow_from_to_requires' do
             end
 
             it do
-              is_expected.to run.with_params(publish, prefixes, default_allow_from, strict).and_return(
+              is_expected.to run.with_params(publish, prefixes, repos, default_allow_from, strict).and_return(
                 '' => {
                   'pool' => ['user1'],
                   'dists' => {
-                    'foo' => ['user1'],
-                    'bar' => ['user1'],
+                    'foo' => { 'public' => ['user1'] },
+                    'bar' => { 'public' => ['user1'] },
                   },
                 },
               )
@@ -100,18 +127,18 @@ describe 'aptly_profile::convert_publish_allow_from_to_requires' do
             if strict
               it 'fails when strict' do
                 pending 'strict validation not implemented yet'
-                is_expected.to run.with_params(publish, prefixes, default_allow_from, strict).and_raise_error(
+                is_expected.to run.with_params(publish, prefixes, repos, default_allow_from, strict).and_raise_error(
                   %r{Found difference in users within prefix '' with strict enabled},
                 )
               end
             else
               it 'merges the users' do
-                is_expected.to run.with_params(publish, prefixes, default_allow_from, strict).and_return(
+                is_expected.to run.with_params(publish, prefixes, repos, default_allow_from, strict).and_return(
                   '' => {
                     'pool' => ['user1', 'user2'],
                     'dists' => {
-                      'foo' => ['user1'],
-                      'bar' => ['user2'],
+                      'foo' => { 'public' => ['user1'] },
+                      'bar' => { 'public' => ['user2'] },
                     },
                   },
                 )
@@ -129,12 +156,12 @@ describe 'aptly_profile::convert_publish_allow_from_to_requires' do
           end
 
           it do
-            is_expected.to run.with_params(publish, prefixes, default_allow_from, strict).and_return(
+            is_expected.to run.with_params(publish, prefixes, repos, default_allow_from, strict).and_return(
               '' => {
                 'pool' => 'valid-user',
                 'dists' => {
-                  'foo' => 'valid-user',
-                  'bar' => 'valid-user',
+                  'foo' => { 'public' => 'valid-user' },
+                  'bar' => { 'public' => 'valid-user' },
                 },
               },
             )
@@ -150,7 +177,7 @@ describe 'aptly_profile::convert_publish_allow_from_to_requires' do
           end
 
           it do
-            is_expected.to run.with_params(publish, prefixes, default_allow_from, strict)
+            is_expected.to run.with_params(publish, prefixes, repos, default_allow_from, strict)
                               .and_raise_error(%r{Unable to resolve permissions in prefix ''})
           end
         end
@@ -171,17 +198,17 @@ describe 'aptly_profile::convert_publish_allow_from_to_requires' do
             it 'fails when strict' do
               pending 'strict validation not implemented yet'
               is_expected.to run
-                .with_params(publish, prefixes, default_allow_from, strict)
+                .with_params(publish, prefixes, repos, default_allow_from, strict)
                 .and_raise_error(%r{Found difference in users within prefix 'prefix' with strict enabled})
             end
           else
             it do
-              is_expected.to run.with_params(publish, prefixes, default_allow_from, strict).and_return(
+              is_expected.to run.with_params(publish, prefixes, repos, default_allow_from, strict).and_return(
                 'prefix' => {
                   'pool' => 'valid-user',
                   'dists' => {
-                    'authenticated' => 'valid-user',
-                    'users' => ['user1'],
+                    'authenticated' => { 'public' => 'valid-user' },
+                    'users' => { 'public' => ['user1'] },
                   },
                 },
               )
@@ -202,12 +229,12 @@ describe 'aptly_profile::convert_publish_allow_from_to_requires' do
           end
 
           it do
-            is_expected.to run.with_params(publish, prefixes, default_allow_from, strict).and_return(
+            is_expected.to run.with_params(publish, prefixes, repos, default_allow_from, strict).and_return(
               'prefix' => {
                 'pool' => 'valid-user',
                 'dists' => {
-                  'authenticated' => 'valid-user',
-                  'prefixed' => 'valid-user',
+                  'authenticated' => { 'public' => 'valid-user' },
+                  'prefixed' => { 'public' => 'valid-user' },
                 },
               },
             )
@@ -233,18 +260,18 @@ describe 'aptly_profile::convert_publish_allow_from_to_requires' do
             it 'fails when strict' do
               pending 'strict validation not implemented yet'
               is_expected.to run
-                .with_params(publish, prefixes, default_allow_from, strict)
+                .with_params(publish, prefixes, repos, default_allow_from, strict)
                 .and_raise_error(%r{Found difference in users within prefix 'prefix' with strict enabled})
             end
           else
             it do
-              is_expected.to run.with_params(publish, prefixes, default_allow_from, strict).and_return(
+              is_expected.to run.with_params(publish, prefixes, repos, default_allow_from, strict).and_return(
                 'prefix' => {
                   'pool' => ['user1', 'user2', 'user3'],
                   'dists' => {
-                    'users' => ['user1', 'user2'],
-                    'also_users' => ['user2', 'user3'],
-                    'prefixed' => ['user1', 'user2', 'user3'],
+                    'also_users' => { 'public' => ['user2', 'user3'] },
+                    'prefixed' => { 'public' => ['user1', 'user2', 'user3'] },
+                    'users' => { 'public' => ['user1', 'user2'] },
                   },
                 },
               )
@@ -262,11 +289,11 @@ describe 'aptly_profile::convert_publish_allow_from_to_requires' do
           end
 
           it do
-            is_expected.to run.with_params(publish, prefixes, default_allow_from, strict).and_return(
+            is_expected.to run.with_params(publish, prefixes, repos, default_allow_from, strict).and_return(
               '' => {
                 'pool' => ['user'],
                 'dists' => {
-                  'stable' => ['user'],
+                  'stable' => { 'public' => ['user'] },
                 },
               },
             )

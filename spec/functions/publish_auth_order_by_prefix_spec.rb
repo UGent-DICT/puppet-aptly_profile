@@ -1,62 +1,49 @@
 require 'spec_helper'
 
 describe 'aptly_profile::publish_auth_order_by_prefix' do
+  let(:repos) do
+    {
+      'repo1' => { 'allow_from' => ['deployuser'] },
+      'repo2' => { 'allow_from' => 'authenticated' },
+    }
+  end
+
   describe 'splits by prefix' do
     let(:publish) do
       {
         'foobar' => {},
-        'main/foo' => {},
-        'main/bar' => {
-          'allow_from' => ['user1'],
-        },
-      }
-    end
-
-    let(:expected_result) do
-      {
-        '' => {
-          'foobar' => nil,
-        },
-        'main' => {
-          'foo' => nil,
-          'bar' => ['user1'],
-        },
-      }
-    end
-
-    it do
-      is_expected.to run.with_params(publish).and_return(expected_result)
-    end
-  end
-
-  describe 'cleans up unwanted parameters' do
-    let(:publish) do
-      {
-        'foobar' => {},
         'main/foo' => {
-          'param1' => 'value1',
-          'param2' => 'value2',
+          'paramx' => 'foobar',
         },
         'main/bar' => {
           'allow_from' => ['user1'],
-          'param3' => 'value3',
         },
       }
     end
+
     let(:expected_result) do
       {
         '' => {
-          'foobar' => nil,
+          'foobar' => {
+            'api' => nil,
+            'public' => nil,
+          },
         },
         'main' => {
-          'foo' => nil,
-          'bar' => ['user1'],
+          'foo' => {
+            'api' => nil,
+            'public' => nil,
+          },
+          'bar' => {
+            'api' => nil,
+            'public' => ['user1'],
+          },
         },
       }
     end
 
     it do
-      is_expected.to run.with_params(publish).and_return(expected_result)
+      is_expected.to run.with_params(publish, repos).and_return(expected_result)
     end
   end
 
@@ -68,7 +55,7 @@ describe 'aptly_profile::publish_auth_order_by_prefix' do
     end
 
     it do
-      is_expected.to run.with_params(publish).and_raise_error(%r{'allow_from' for publish point 'main' expects a })
+      is_expected.to run.with_params(publish, repos).and_raise_error(%r{'allow_from' for publish point 'main' expects a })
     end
   end
 
@@ -83,15 +70,24 @@ describe 'aptly_profile::publish_auth_order_by_prefix' do
     let(:expected_result) do
       {
         '' => {
-          'not_defined' => nil,
-          'wrong_defined' => nil,
-          'specified' => ['user1'],
+          'not_defined' => {
+            'api' => nil,
+            'public' => nil,
+          },
+          'wrong_defined' => {
+            'api' => nil,
+            'public' => nil,
+          },
+          'specified' => {
+            'api' => nil,
+            'public' => ['user1'],
+          },
         },
       }
     end
 
     it do
-      is_expected.to run.with_params(publish).and_return(expected_result)
+      is_expected.to run.with_params(publish, repos).and_return(expected_result)
     end
   end
 
@@ -108,18 +104,36 @@ describe 'aptly_profile::publish_auth_order_by_prefix' do
     end
 
     it do
-      is_expected.to run.with_params(publish).and_return(
+      is_expected.to run.with_params(publish, repos).and_return(
         '' => {
-          'aaa' => nil,
-          'jjj' => ['user'],
-          'zzz' => ['aaa', 'bbb', 'ooo', 'ttt'],
+          'aaa' => {
+            'api' => nil,
+            'public' => nil,
+          },
+          'jjj' => {
+            'api' => nil,
+            'public' => ['user'],
+          },
+          'zzz' => {
+            'api' => nil,
+            'public' => ['aaa', 'bbb', 'ooo', 'ttt'],
+          },
         },
         'a' => {
-          'b' => ['user'],
+          'b' => {
+            'api' => nil,
+            'public' => ['user'],
+          },
         },
         'z' => {
-          'a' => nil,
-          'b' => nil,
+          'a' => {
+            'api' => nil,
+            'public' => nil,
+          },
+          'b' => {
+            'api' => nil,
+            'public' => nil,
+          },
         },
       )
     end

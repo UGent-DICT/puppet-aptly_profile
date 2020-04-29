@@ -11,17 +11,25 @@
     ''      => ':\.',
     default => $prefix,
   }
-  $shared_require = $requires['pool']
   $distribution_requires = $requires['dists']
 -%>
 
+<LocationMatch "^<%= $api_path %>/+publish/+<%= $match_prefix %>$">
+  AuthType <%= $auth_type %>
+  AuthBasicProvider file
+  AuthUserFile <%= $auth_file %>
+  <Limit POST>
+    Require <%= aptly_profile::format_require($requires['api']) %>
+  </Limit>
+</LocationMatch>
+
 # API Configuration for publish prefix '<%= $prefix %>'
 ## Distributions
-<% $distribution_requires.each |String $distro, Aptly_profile::LocationRequires $require| { -%>
+<% $distribution_requires.each |String $distro, Aptly_profile::DistroRequires $require| { -%>
 <LocationMatch "^<%= $api_path %>/+publish/+<%= $match_prefix %>/<%= $distro %>$">
   AuthType <%= $auth_type %>
   AuthBasicProvider file
   AuthUserFile <%= $auth_file %>
-  Require <%= aptly_profile::format_require($require) %>
+  Require <%= aptly_profile::format_require($require['api']) %>
 </LocationMatch>
 <% } -%>

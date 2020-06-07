@@ -7,12 +7,14 @@ function aptly_profile::publish_auth_resolve_permissions_by_prefix(
   String $prefix,
   Hash[String, Aptly_profile::DistroPermissions, 1] $distributions,
 )
->> Hash[String, Aptly_profile::LocationRequires]
+>> Hash[String, Aptly_profile::DistroRequires]
 {
 
-  $shared_permissions = aptly_profile::publish_auth_resolve_shared_permissions($distributions)
+  $public_permissions = $distributions.aptly_profile::publish_auth_collect_permissions_by_type('public')
 
-  if $shared_permissions.empty() {
+  $public_shared_permissions = aptly_profile::publish_auth_resolve_shared_permissions($public_permissions)
+
+  if $public_permissions.size() > 0 and $public_shared_permissions.empty() {
     $errmsg = @("ERRMSG")
       Unable to resolve permissions in prefix '${prefix}'.
       You need to specify at least one user or 'authenticated' in a prefix.
@@ -20,20 +22,28 @@ function aptly_profile::publish_auth_resolve_permissions_by_prefix(
     fail($errmsg)
   }
 
+  $api_permissions = $distributions.aptly_profile::publish_auth_collect_permissions_by_type('api')
+  $api_shared_permissions = aptly_profile::publish_auth_resolve_shared_permissions($api_permissions)
+
   $distributions.reduce({}) |Hash $memo, Tuple[String, Aptly_profile::DistroPermissions] $element| {
     $distro = $element[0]
-    $permissions = $element[1]
-    case $permissions {
-      'prefix': {
-        $resolved_permissions = $shared_permissions
-      }
-      'authenticated': {
-        $resolved_permissions = 'valid-user'
-      }
-      default: {
-        $resolved_permissions = $permissions
-      }
+    $public_permission = $element[1].dig('public')
+    $api_permission = $element[1].dig('api')
+
+    $resolved_public = $public_permission ? {
+      undef   => {},
+      default => {
+        'public' => aptly_profile::publish_auth_convert_allow_from_permission_to_requires($public_permission, $public_shared_permissions),
+      },
     }
+    $resolved_api = $api_permission ? {
+      undef   => {},
+      default => {
+        'api' => aptly_profile::publish_auth_convert_allow_from_permission_to_requires($api_permission, $api_shared_permissions),
+      },
+    }
+    $resolved_permissions = {} + $resolved_api + $resolved_public
+
     deep_merge($memo, { $distro => $resolved_permissions })
   }
 }

@@ -23,11 +23,21 @@
 </Location>
 
 ## Distributions
-<% $distribution_requires.each |String $distro, Aptly_profile::LocationRequires $require| { -%>
+<%
+
+$distribution_requires.each |String $distro, Aptly_profile::DistroRequires $require| {
+  if $require.dig('public') =~ NotUndef {
+
+-%>
 <Location "<%= $prefix_path %>dists/<%= $distro %>/">
   AuthType <%= $auth_type %>
   AuthBasicProvider file
   AuthUserFile <%= $auth_file %>
-  Require <%= aptly_profile::format_require($require) %>
+  Require <%= aptly_profile::format_require($require['public']) %>
 </Location>
-<% } -%>
+<%
+
+  }
+}
+
+-%>

@@ -20,9 +20,37 @@ describe 'aptly_profile::publish_auth_clean_and_default_prefixes' do
   it do
     is_expected.to run.with_params(
       default, {
-        'full_empty' => { 'foo' => nil, 'bar' => nil },
+        'full_empty' => {
+          'foo' => {
+            'api' => nil,
+            'public' => nil,
+          },
+          'bar' => {
+            'api' => nil,
+            'public' => nil,
+          },
+        },
       }, {}
     ).and_return({})
+  end
+
+  it do
+    is_expected.to run.with_params(
+      default, {
+        '' => {
+          'with_api' => {
+            'api' => ['userx'],
+            'public' => nil,
+          },
+        },
+      }, {}
+    ).and_return(
+      '' => {
+        'with_api' => {
+          'api' => ['userx'],
+        },
+      },
+    )
   end
 
   it do
@@ -30,35 +58,59 @@ describe 'aptly_profile::publish_auth_clean_and_default_prefixes' do
       default,
       {
         '' => {
-          'main' => ['user1'],
-          'unknown' => nil,
+          'main' => {
+            'api' => nil,
+            'public' => ['user1'],
+          },
+          'unknown' => {
+            'api' => nil,
+            'public' => nil,
+          },
         },
         'bis' => {
-          'main' => 'prefix',
-          'unknown' => nil,
+          'main' => {
+            'api' => nil,
+            'public' => 'prefix',
+          },
+          'unknown' => {
+            'api' => nil,
+            'public' => nil,
+          },
         },
         'nowork' => {
-          'foo' => ['user1'],
-          'bar' => ['user2'],
+          'foo' => {
+            'api' => nil,
+            'public' => ['user1'],
+          },
+          'bar' => {
+            'api' => nil,
+            'public' => ['user2'],
+          },
         },
         'empty' => {
-          'nope' => nil,
-          'also_nope' => nil,
+          'nope' => {
+            'api' => nil,
+            'public' => nil,
+          },
+          'also_nope' => {
+            'api' => nil,
+            'public' => nil,
+          },
         },
       },
       prefixes,
     ).and_return(
       '' => {
-        'main' => ['user1'],
-        'unknown' => 'default_allow_from',
+        'main' => { 'public' => ['user1'] },
+        'unknown' => { 'public' => 'default_allow_from' },
       },
       'bis' => {
-        'main' => 'prefix',
-        'unknown' => 'default_from_prefixes',
+        'main' => { 'public' => 'prefix' },
+        'unknown' => { 'public' => 'default_from_prefixes' },
       },
       'nowork' => {
-        'foo' => ['user1'],
-        'bar' => ['user2'],
+        'foo' => { 'public' => ['user1'] },
+        'bar' => { 'public' => ['user2'] },
       },
     )
   end

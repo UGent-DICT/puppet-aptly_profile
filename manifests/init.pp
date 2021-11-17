@@ -518,35 +518,38 @@ class aptly_profile(
     target =>  "${basename}.sec",
   }
 
-  @@::apt::key { "aptly key ${::hostname}":
-    id      => $key['fingerprint'],
-    content => $key['public_key'],
-    tag     => $facts['fqdn'],
-  }
-
-  if $gpg_import_apt {
-    ::apt::key { "aptly key ${::hostname}-local":
+  # default key has no fingerprint yet. wait till the facts pick it up
+  if $key['fingerprint'] {
+    @@::apt::key { "aptly key ${::hostname}":
       id      => $key['fingerprint'],
       content => $key['public_key'],
+      tag     => $facts['fqdn'],
     }
-  }
 
-  # Aptly expects the signing key to be in its GnuPG keyring
-  # Import/replace it
-  exec { 'aptly_profile::init import aptly GPG key in to keyring':
-    user        => $aptly_user,
-    environment => ["HOME=${aptly_homedir}"],
-    cwd         => $aptly_homedir,
-    unless      => "${real_gpg_path} --list-secret-keys ${key['fingerprint']}",
-    command     => "${real_gpg_path} --import '${basename}.sec'",
-  }
-  exec { 'aptly_profile::init update aptly GPG key in keyring':
-    refreshonly => true,
-    subscribe   => File["${basename}.sec"],
-    user        => $aptly_user,
-    environment => ["HOME=${aptly_homedir}"],
-    cwd         => $aptly_homedir,
-    command     => "/bin/rm -rf .gnupg; ${real_gpg_path} --import '${basename}.sec'",
+    if $gpg_import_apt {
+      ::apt::key { "aptly key ${::hostname}-local":
+        id      => $key['fingerprint'],
+        content => $key['public_key'],
+      }
+    }
+
+    # Aptly expects the signing key to be in its GnuPG keyring
+    # Import/replace it
+    exec { 'aptly_profile::init import aptly GPG key in to keyring':
+      user        => $aptly_user,
+      environment => ["HOME=${aptly_homedir}"],
+      cwd         => $aptly_homedir,
+      unless      => "${real_gpg_path} --list-secret-keys ${key['fingerprint']}",
+      command     => "${real_gpg_path} --import '${basename}.sec'",
+    }
+    exec { 'aptly_profile::init update aptly GPG key in keyring':
+      refreshonly => true,
+      subscribe   => File["${basename}.sec"],
+      user        => $aptly_user,
+      environment => ["HOME=${aptly_homedir}"],
+      cwd         => $aptly_homedir,
+      command     => "/bin/rm -rf .gnupg; ${real_gpg_path} --import '${basename}.sec'",
+    }
   }
 
 }

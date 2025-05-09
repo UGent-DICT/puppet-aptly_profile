@@ -245,8 +245,9 @@ class Aptly
     end
     args << '-with-sources=' + config['with_sources'].to_s
     args << '-with-udebs=' + config['with_udebs'].to_s
+
     args << '-with-installer=' + config['with_installer'].to_s
-    args << '-filter="' + config['filter'] + '"' unless config['filter'].empty?
+    args << "-filter=#{config['filter'].to_s}" unless config['filter'].empty?
 
     if Gem::Version.new(aptly_version) >= APTLY_VERSION_INTRODUCE_FORCE_COMPONENTS
       args << '-force-components=' + config['force_components'].to_s

@@ -230,6 +230,7 @@ class Aptly
     config = {
       'with_sources'     => false,
       'with_udebs'       => false,
+      'with_installer'   => false,
       'filter_with_deps' => false,
       'architectures'    => [],
       'environment'      => [],
@@ -244,6 +245,7 @@ class Aptly
     end
     args << '-with-sources=' + config['with_sources'].to_s
     args << '-with-udebs=' + config['with_udebs'].to_s
+    args << '-with-installer=' + config['with_installer'].to_s
     args << '-filter="' + config['filter'] + '"' unless config['filter'].empty?
 
     if Gem::Version.new(aptly_version) >= APTLY_VERSION_INTRODUCE_FORCE_COMPONENTS

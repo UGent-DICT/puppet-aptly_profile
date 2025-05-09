@@ -10,5 +10,7 @@
   AuthType <%= $auth_type %>
   AuthBasicProvider file
   AuthUserFile <%= $auth_file %>
-  Require <%= aptly_profile::format_require($require) %>
+  <Limit GET>
+    Require <%= aptly_profile::format_require($require) %>
+  </Limit>
 </LocationMatch>

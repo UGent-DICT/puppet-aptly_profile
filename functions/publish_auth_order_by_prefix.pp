@@ -10,26 +10,40 @@
 #     foobar:
 #       components: {}
 #     main/foo:
-#       components: {}
+#       components:
+#         test:
+#           repo: testrepo
 #       param1: value1
 #     main/bar:
 #       allow_from: [user]
 #       param2: value2
 #
+#   # parameter repos being:
+#   repos:
+#     testrepo:
+#       allow_from: [admin]
+#
+#
 #   # returned result:
 #   result:
 #     '':
-#       foobar: nil
+#       foobar:
+#         public: nil
+#         api: nil
 #     'main':
-#       'foo': nil
-#       'bar': [user]
-#
+#       'foo':
+#         public: nil
+#         api: [admin]
+#       'bar':
+#         public: [user]
+#         api: nil
 #
 # @param publish A hash of publish endpoints.
 function aptly_profile::publish_auth_order_by_prefix(
   Hash $publish,
+  Hash $repos,
 )
->> Hash[String, Hash[String, Optional[Aptly_profile::DistroPermissions]]]
+>> Hash[String, Hash[String, Aptly_profile::DistroPermissions]]
 {
 
   $unsorted = $publish.reduce({}) |Hash $memo, Tuple[String, Hash] $element| {
@@ -45,19 +59,21 @@ function aptly_profile::publish_auth_order_by_prefix(
     }
 
     if $publish_params.dig('allow_from') =~ NotUndef {
-      assert_type(Aptly_profile::DistroPermissions, $publish_params['allow_from']) |$expected, $actual| {
+      assert_type(Aptly_profile::AllowFromPermissions, $publish_params['allow_from']) |$expected, $actual| {
         fail("Parameter 'allow_from' for publish point '${publish_point}' expects a ${expected}. Not '${publish_params['allow_from']}'")
       }
-      $allow_from = $publish_params['allow_from'] ? {
+      $public_allow_from = $publish_params['allow_from'] ? {
         Array   => $publish_params['allow_from'].sort(),
         default => $publish_params['allow_from'],
       }
-      $publish_allow = { $prefix => { $distribution => $allow_from, }}
     }
     else {
-      $publish_allow = { $prefix => { $distribution => undef, }}
+      $public_allow_from = undef
     }
-    deep_merge($memo, $publish_allow)
+
+    $api_allow_from = aptly_profile::publish_auth_resolve_api_permissions($publish_params, $repos)
+    $distribution_params = { 'public' => $public_allow_from, 'api' => $api_allow_from }
+    deep_merge($memo, { $prefix => { $distribution => $distribution_params, }})
   }
 
   # sort by prefix and by distribution.

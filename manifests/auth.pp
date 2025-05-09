@@ -67,21 +67,23 @@ class aptly_profile::auth(
     content => "# This file is managed by puppet and build from concat fragments in aptly_profile\n\n",
   }
 
+  $repos_with_permissions = $repos.filter |$item| {
+    $item[1].dig('allow_from') != undef and ! $item[1].dig('allow_from').empty() and $item[1].dig('ensure') != 'absent'
+  }
+
   # Get all entries that are not ensure 'absent' since those will be unmanaged.
   $ensured_publish = $publish.filter |$item| {
     $item[1].dig('ensure') != 'absent'
   }
 
+  # Deals with all /public things.
   $restricted_publish = aptly_profile::convert_publish_allow_from_to_requires(
-    $ensured_publish, $prefixes, $default_allow_from, $strict_publish
+    $ensured_publish, $prefixes, $repos_with_permissions, $default_allow_from, $strict_publish
   )
 
   if $enable_api {
     # for repos, we only have api access rules to define.
-    $repos.filter |$item| {
-      $item[1].dig('allow_from') != undef and ! $item[1].dig('allow_from').empty() and $item[1].dig('ensure') != 'absent'
-    }.each |String $repo_name, Hash $config| {
-
+    $repos_with_permissions.each |String $repo_name, Hash $config| {
       concat::fragment {"aptly_profile::auth: repo ${repo_name}":
         target  => $config_path,
         order   => 1,
@@ -91,26 +93,17 @@ class aptly_profile::auth(
           auth_type  => $auth_type,
           repo_name  => $repo_name,
           allow_from => $config['allow_from'],
-        }),
+          }),
       }
     }
 
-    if $restricted_publish.size() > 0 {
-      # resolve the shared permissions for all prefixes to allow access to the shared ^/api/publish$
-      # @todo: add a flag to disable /api/publish
-      $global_shared_permissions = $restricted_publish.reduce({}) |Hash $memo, Tuple $element| {
-        $memo + { $element[0] => $element[1]['pool'] }
-      }
+    $global_publish_get = $restricted_publish.map() |$_, $req| {
+      $req.dig('api')
+    }.filter() |$p| {
+      $p =~ NotUndef
+    }
 
-      if ('valid-user' in $global_shared_permissions.values()) {
-        $global_shared_require = 'valid-user'
-      }
-      else {
-        $global_shared_require = $global_shared_permissions.filter() |$_, $v| {
-          $v =~ Array
-          }.values().flatten().sort().unique()
-      }
-
+    unless $global_publish_get.empty() {
       # TODO: Strict mode disabled /api/publish endpoint (unless all permissions are equal over all prefixes?)
       concat::fragment {"aptly_profile::auth: api public shared":
         target  => $config_path,
@@ -119,37 +112,39 @@ class aptly_profile::auth(
           api_path  => $api_path,
           auth_file => $passfile,
           auth_type => $auth_type,
-          require   => $global_shared_require,
-          }),
-      }
-
-      $restricted_publish.each |String $prefix, Aptly_profile::PrefixRequires $requires| {
-        concat::fragment {"aptly_profile::auth: api public prefix ${prefix}":
-          target  => $config_path,
-          order   => 5,
-          content => epp('aptly_profile/auth/apache_auth_publish_api_prefix.conf.epp', {
-            api_path  => $api_path,
-            auth_file => $passfile,
-            auth_type => $auth_type,
-            prefix    => $prefix,
-            requires  => $requires,
-            }),
-        }
-      }
-    }
-  }
-
-  # Restrict access for <datadir>/public/
-  $restricted_publish.each |String $prefix, Aptly_profile::PrefixRequires $requires| {
-    concat::fragment {"aptly_profile::auth: public publish prefix ${prefix}":
-      target  => $config_path,
-      order   => 7,
-      content => epp('aptly_profile/auth/apache_auth_publish_prefix.conf.epp', {
-        auth_file => $passfile,
-        auth_type => $auth_type,
-        prefix    => $prefix,
-        requires  => $requires,
+          require   => $global_publish_get.aptly_profile::publish_auth_resolve_shared_permissions()
         }),
+      }
     }
   }
+
+  $restricted_publish.each |String $prefix, Aptly_profile::PrefixRequires $requires| {
+    if $requires.dig('pool') =~ NotUndef {
+      concat::fragment {"aptly_profile::auth: public publish prefix ${prefix}":
+        target  => $config_path,
+        order   => 7,
+        content => epp('aptly_profile/auth/apache_auth_publish_prefix.conf.epp', {
+          auth_file => $passfile,
+          auth_type => $auth_type,
+          prefix    => $prefix,
+          requires  => $requires,
+        }),
+      }
+    }
+
+    if ($enable_api and $requires.dig('api') =~ NotUndef) {
+      concat::fragment {"aptly_profile::auth: api public prefix ${prefix}":
+        target  => $config_path,
+        order   => 5,
+        content => epp('aptly_profile/auth/apache_auth_publish_api_prefix.conf.epp', {
+          api_path  => $api_path,
+          auth_file => $passfile,
+          auth_type => $auth_type,
+          prefix    => $prefix,
+          requires  => $requires,
+        }),
+      }
+    }
+  }
+
 }

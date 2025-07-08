@@ -258,7 +258,9 @@ class Aptly
     args << name
     args << config['location']
     args << config['release']
-    args << config['repos'].join(' ') unless config['repos'].empty?
+
+    args.concat(config['repos']) unless config['repos'].empty?
+
     @logger.info("Creating mirror #{name} => #{config['location']}")
     run(@aptly_cmd, *args)
   end

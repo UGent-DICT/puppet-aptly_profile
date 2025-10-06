@@ -508,6 +508,11 @@ class aptly_profile(
     content => $key['public_key'],
   }
 
+  file { "${aptly_homedir}/public/aptly.asc":
+    ensure => 'link',
+    target => "${basename}.pub",
+  }
+
   file { '/etc/gpg_keys/aptly.pub':
     ensure => link,
     target =>  "${basename}.pub",

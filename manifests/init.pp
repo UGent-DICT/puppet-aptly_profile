@@ -525,14 +525,14 @@ class aptly_profile(
 
   # default key has no fingerprint yet. wait till the facts pick it up
   if $key['fingerprint'] {
-    @@::apt::key { "aptly key ${::hostname}":
+    @@::apt::key { "aptly key ${facts['networking']['hostname']}":
       id      => $key['fingerprint'],
       content => $key['public_key'],
       tag     => $facts['fqdn'],
     }
 
     if $gpg_import_apt {
-      ::apt::key { "aptly key ${::hostname}-local":
+      ::apt::key { "aptly key ${facts['networking']['hostname']}-local":
         id      => $key['fingerprint'],
         content => $key['public_key'],
       }

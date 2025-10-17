@@ -133,6 +133,48 @@ class aptly_profile(
     default => $gpg_path,
   }
 
+  # Existing gpg key. We need this early so we can check if instant publish is an option.
+  $existing_key = keypair::get_first_matching_value($::facts['gpg_keys'], {
+    'secret_present' => true,
+    'basename'       => 'aptly',
+  })
+
+  $basename = "${aptly_homedir}/gpg_keys/aptly"
+
+  if $existing_key {
+    $key = $existing_key
+    file { "${basename}.sec":
+      ensure  => file,
+      owner   => $aptly_user,
+      group   => 'root',
+      mode    => '0400',
+      content => undef,
+    }
+  }
+  else { # no existing key
+    if $default_key {
+      $key = $default_key
+    }
+    else {
+      $key = gpg_generate_key({
+        'uid' => $gpg_uid,
+      })
+    }
+
+    file { "${basename}.sec":
+      ensure  => file,
+      owner   => $aptly_user,
+      group   => 'root',
+      mode    => '0400',
+      content => $key['secret_key'],
+    }
+  }
+  $has_key = $key['fingerprint'] ? {
+    undef   => false,
+    default => true,
+  }
+
+
   # User, group and homedir
   #########################
   if $manage_user {
@@ -361,9 +403,13 @@ class aptly_profile(
       !($pair[0] in $_managed_publish_config_options)
     }
 
-    $instant_publish = $_publish_config.dig('instant_publish') ? {
-      undef   => false,
-      default => $config['instant_publish'],
+    # Prevent instant publish if we dont have the key to sign yet.
+    $instant_publish = $has_key ? {
+      false   => false,
+      default => $_publish_config.dig('instant_publish') ? {
+        undef   => false,
+        default => $config['instant_publish'],
+      },
     }
     $publish_ensure = $_publish_config.dig('ensure') ? {
       undef   => 'present',
@@ -464,41 +510,6 @@ class aptly_profile(
 
   ensure_resource('file', '/etc/gpg_keys', { 'ensure' => 'directory' })
 
-  $basename = "${aptly_homedir}/gpg_keys/aptly"
-
-  $existing_key = keypair::get_first_matching_value($::facts['gpg_keys'], {
-    'secret_present' => true,
-    'basename'       => 'aptly',
-  })
-
-  if $existing_key {
-    $key = $existing_key
-    file { "${basename}.sec":
-      ensure  => file,
-      owner   => $aptly_user,
-      group   => 'root',
-      mode    => '0400',
-      content => undef,
-    }
-  }
-  else { # no existing key
-    if $default_key {
-      $key = $default_key
-    }
-    else {
-      $key = gpg_generate_key({
-        'uid' => $gpg_uid,
-      })
-    }
-
-    file { "${basename}.sec":
-      ensure  => file,
-      owner   => $aptly_user,
-      group   => 'root',
-      mode    => '0400',
-      content => $key['secret_key'],
-    }
-  }
 
   file { "${basename}.pub":
     ensure  => file,

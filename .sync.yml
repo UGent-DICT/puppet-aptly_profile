@@ -18,8 +18,6 @@ spec/spec_helper.rb:
   mock_with: ':rspec'
   hiera_config: 'spec/fixtures/hiera/hiera.yaml'
   spec_overrides: |
-    RSpec.configuration.trusted_server_facts = true
-
     # make sure on_supported_os uses the default facts too.
     default_facts.each do |fact, value|
       add_custom_fact(fact, value)
@@ -28,6 +26,8 @@ spec/spec_helper.rb:
 
     if ENV['PUPPET_DEBUG']
       RSpec.configure do |conf|
+        conf.trusted_node_data = true
+
         conf.before(:each) do
           Puppet::Util::Log.level = :debug
           Puppet::Util::Log.newdestination(:console)

@@ -541,13 +541,13 @@ class aptly_profile(
   if $key['fingerprint'] {
     if versioncmp($facts['os']['release']['major'], '13') >= 0 {
       if $gpg_export_apt {
-        @@apt::keyring { "aptly-${hostname}.asc":
+        @@apt::keyring { "aptly-${facts['networking']['hostname']}.asc":
           content =>  $key['public_key'],
         }
       }
       # Create a keyring for ourselves.
       if $gpg_import_apt {
-        apt::keyring { "aptly-${hostname}.asc":
+        apt::keyring { "aptly-${facts['networking']['hostname']}.asc":
           content => $key['public_key'],
         }
       }

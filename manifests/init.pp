@@ -25,7 +25,9 @@
 # @param cleanup_defaults   String with default options to pass on to a cleanup for a repo.
 #   This value is only used if your repo_defaults does not contain `cleanup_options`.
 # @param gpg_uid            Configure the UID for a newly generated gpg key.
+# @param gpg_export_apt     Export the generated key using @@apt::key or @@apt::keyring (from Debian Trixie)
 # @param gpg_import_apt     Import the generated key in apt immediately.
+#   Note: From Debian trixie and onwards, the key will be stored in a keyring (/etc/apt/keyrings/aptly-<hostname>.asc)
 # @param default_key        The default private/public keypair to use (override generate)
 # @param gpg_path           Override gpg binary to use. Defaults to the gpg_path fact or '/usr/bin/gpg'
 # @param trusted_keys       Hash with trusted keys.
@@ -80,6 +82,7 @@ class aptly_profile(
     secret_key => String[1],
     public_key => String[1],
   }]] $default_key = undef,
+  Boolean $gpg_export_apt = false,
   Boolean $gpg_import_apt = false,
   Optional[Stdlib::Absolutepath] $gpg_path = undef,
   Hash $trusted_keys = {},
@@ -536,16 +539,33 @@ class aptly_profile(
 
   # default key has no fingerprint yet. wait till the facts pick it up
   if $key['fingerprint'] {
-    @@::apt::key { "aptly key ${facts['networking']['hostname']}":
-      id      => $key['fingerprint'],
-      content => $key['public_key'],
-      tag     => $facts['fqdn'],
+    if versioncmp($facts['os']['release']['major'], '13') >= 0 {
+      if $gpg_export_apt {
+        @@apt::keyring { "aptly-${hostname}.asc":
+          content =>  $key['public_key'],
+        }
+      }
+      # Create a keyring for ourselves.
+      if $gpg_import_apt {
+        apt::keyring { "aptly-${hostname}.asc":
+          content => $key['public_key'],
+        }
+      }
     }
+    else {
+      if $gpg_export_apt {
+        @@::apt::key { "aptly key ${facts['networking']['hostname']}":
+          id      => $key['fingerprint'],
+          content => $key['public_key'],
+          tag     => $facts['fqdn'],
+        }
+      }
 
-    if $gpg_import_apt {
-      ::apt::key { "aptly key ${facts['networking']['hostname']}-local":
-        id      => $key['fingerprint'],
-        content => $key['public_key'],
+      if $gpg_import_apt {
+        ::apt::key { "aptly key ${facts['networking']['hostname']}-local":
+          id      => $key['fingerprint'],
+          content => $key['public_key'],
+        }
       }
     }
 
